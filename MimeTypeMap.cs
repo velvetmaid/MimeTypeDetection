@@ -15,7 +15,7 @@ namespace MimeTypeDetection
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                #region Big freaking list of mime types
+                #region MIME mappings
                 // combination of values from Windows 7 Registry and 
                 // from C:\Windows\System32\inetsrv\config\applicationHost.config
                 // some added, including .7z and .dat
@@ -25,6 +25,8 @@ namespace MimeTypeDetection
                 {".3gp2", "video/3gpp2"},
                 {".3gpp", "video/3gpp"},
                 {".7z", "application/x-7z-compressed"},
+                {".arj", "application/x-arj"},
+                {".xar", "application/x-xar"},
                 {".aa", "audio/audible"},
                 {".AAC", "audio/aac"},
                 {".aaf", "application/octet-stream"},
@@ -77,7 +79,7 @@ namespace MimeTypeDetection
                 {".bmp", "image/bmp"},
                 {".bz2", "application/x-bzip2"},
                 {".c", "text/plain"},
-                {".cab", "application/octet-stream"},
+                {".cab", "application/vnd.ms-cab-compressed"},
                 {".caf", "audio/x-caf"},
                 {".calx", "application/vnd.ms-office.calx"},
                 {".cat", "application/vnd.ms-pki.seccat"},
@@ -86,7 +88,7 @@ namespace MimeTypeDetection
                 {".cdda", "audio/aiff"},
                 {".cdf", "application/x-cdf"},
                 {".cer", "application/x-x509-ca-cert"},
-                {".chm", "application/octet-stream"},
+                {".chm", "application/vnd.ms-htmlhelp"},
                 {".class", "application/x-java-applet"},
                 {".clp", "application/x-msclip"},
                 {".cmx", "image/x-cmx"},
@@ -160,7 +162,7 @@ namespace MimeTypeDetection
                 {".group", "text/x-ms-group"},
                 {".gsm", "audio/x-gsm"},
                 {".gtar", "application/x-gtar"},
-                {".gz", "application/x-gzip"},
+                {".gz", "application/gzip"},
                 {".h", "text/plain"},
                 {".hdf", "application/x-hdf"},
                 {".hdml", "text/x-hdml"},
@@ -234,7 +236,7 @@ namespace MimeTypeDetection
                 {".lsf", "video/x-la-asf"},
                 {".lst", "text/plain"},
                 {".lsx", "video/x-la-asf"},
-                {".lzh", "application/octet-stream"},
+                {".lzh", "application/x-lzh-compressed"},
                 {".m13", "application/x-msmediaview"},
                 {".m14", "application/x-msmediaview"},
                 {".m1v", "video/mpeg"},
@@ -378,7 +380,7 @@ namespace MimeTypeDetection
                 {".qxd", "application/octet-stream"},
                 {".ra", "audio/x-pn-realaudio"},
                 {".ram", "audio/x-pn-realaudio"},
-                {".rar", "application/x-rar-compressed"},
+                {".rar", "application/vnd.rar"},
                 {".ras", "image/x-cmu-raster"},
                 {".rat", "application/rat-file"},
                 {".rc", "text/plain"},
@@ -393,7 +395,7 @@ namespace MimeTypeDetection
                 {".rmi", "audio/mid"},
                 {".rmp", "application/vnd.rn-rn_music_package"},
                 {".roff", "application/x-troff"},
-                {".rpm", "audio/x-pn-realaudio-plugin"},
+                {".rpm", "application/x-rpm"},
                 {".rqy", "text/x-ms-rqy"},
                 {".rtf", "application/rtf"},
                 {".rtx", "text/richtext"},
@@ -464,7 +466,7 @@ namespace MimeTypeDetection
                 {".trx", "application/xml"},
                 {".ts", "video/vnd.dlna.mpeg-tts"},
                 {".tsv", "text/tab-separated-values"},
-                {".ttf", "application/octet-stream"},
+                {".ttf", "font/ttf"},
                 {".tts", "video/vnd.dlna.mpeg-tts"},
                 {".txt", "text/plain"},
                 {".u32", "application/octet-stream"},

@@ -1,181 +1,169 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
+using System.Text;
+using MimeTypeDetection.Helper;
 
 namespace MimeTypeDetection
 {
     public class MimeTypeService
     {
-        private static readonly IReadOnlyDictionary<string, string> _map = MimeTypeMap.Mappings;
+        public const int MaxContentBytes = 50 * 1024 * 1024;
 
-        // Signature-based detection
-        private static readonly IList<FileType> knownFileTypes = new List<FileType>
+        // Keep only signatures that identify a format rather than a shared container.
+        private static readonly FileType[] KnownTypes =
         {
-            // ===== Common file types =====
-            new FileType("Bitmap", ".bmp", new byte?[] { 0x42, 0x4d }),
-            new FileType("Portable Network Graphic", ".png", new byte?[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
-            new FileType("JPEG", ".jpg", new byte?[] { 0xFF, 0xD8, 0xFF }),
-            new FileType("JPEG", ".jpeg", new byte?[] { 0xFF, 0xD8, 0xFF }),
-            new FileType("GIF", ".gif", new byte?[] { 0x47, 0x49, 0x46, 0x38 }),
-            new FileType("Graphics Interchange Format 87a", ".gif", new byte?[] { 0x47, 0x49, 0x46, 0x38, 0x37, 0x61 }),
-            new FileType("Graphics Interchange Format 89a", ".gif", new byte?[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 }),
-            new FileType("ICO", ".ico", new byte?[] { 0, 0, 1, 0 }),
-            new FileType("TIFF", ".tif", new byte?[] { 73, 73, 42, 0 }),
-            new FileType("TIFF", ".tif", new byte?[] { 0x4D, 0x4D, 0x00, 0x2A }),
-            new FileType("TTF", ".ttf", new byte?[] { 0, 1, 0, 0, 0 }),
-            new FileType("ICO", ".ico", new byte?[] { 0, 0, 1, 0}),
-            new FileType("EXE_DLL", ".exe", new byte?[] { 77, 90 }),
-            new FileType("OGG", ".ogg", new byte?[] { 79, 103, 103, 83, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0 }),
-            new FileType("SWF", ".swf", new byte?[] { 70, 87, 83 }),
-            new FileType("WAV_AVI", ".avi", new byte?[] { 82, 73, 70, 70 }),
-            new FileType("WMV_WMA", ".wma", new byte?[] { 48, 38, 178, 117, 142, 102, 207, 17, 166, 217, 0, 170, 0, 98, 206, 108 }),
-            new FileType("MP3", ".mp3", new byte?[] { 255, 251, 48 }),
-            new FileType("MKV", ".mkv", new byte?[] { 0x1A, 0x45, 0xDF, 0xA3 }),
-            new FileType("TORRENT", ".torrent", new byte?[] { 100, 56, 58, 97, 110, 110, 111, 117, 110, 99, 101 }),
-            new FileType("TXT", ".txt", new byte?[] {0x46, 0x4F, 0x52, 0x4D, null, null, null, null,0x46, 0x54, 0x58, 0x54 }),
-            new FileType("Portable Document Format", ".pdf", new byte?[] { 0x25, 0x50, 0x44, 0x46 }, 1019),
-            new FileType("Portable Document Format", ".pdf", new byte?[] { 37, 80, 68, 70, 45, 49, 46 }),
-            new FileType("Microsoft Excel", ".xls", new byte?[] { 0x09, 0x08, 0x10, 0x00, 0x00, 0x06, 0x05, 0x00 }, 512),
-          //new FileType("Microsoft Office", ".office", new byte?[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00 }),
-          //new FileType("Microsoft Word", ".docx", new byte?[] { 80, 75, 3, 4, 20 }),
-          /*new FileType("Microsoft Excel", ".xlsx222", new byte?[] { 0x50, 0x4B, 0x05, 0x06 }),
-            new FileType("Microsoft Excel", ".xlsx444", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-            new FileType("Microsoft Excel", ".xlsx3333", new byte?[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00 }),*/
-            new FileType("Microsoft Office Word - Legacy", ".doc", new byte?[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }),
-            new FileType("Microsoft Office Excel - Legacy", ".xls", new byte?[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }),
-            new FileType("Microsoft Office PowerPoint - Legacy", ".ppt", new byte?[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }),
-            new FileType("Outlook Message File", ".msg", new byte?[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }),
-          /*new FileType("Microsoft Office Word", ".docx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("Microsoft Office Excel", ".xlsx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("Microsoft Office PowerPoint", ".pptx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),*/
-            new FileType("Microsoft Office Word", ".doc", new byte?[] { 0xEC, 0xA5, 0xC1, 0x00 }, 512),
-          //new FileType("Microsoft Office Word", ".doc", new byte?[] { 208, 207, 17, 224, 161, 177, 26, 225 }),
-            new FileType("Microsoft Office PowerPoint", ".ppt", new byte?[] { 0xFD, 0xFF, 0xFF, 0xFF, null, 0x00, 0x00, 0x00 }, 512),
-            new FileType("RAR", ".rar", new byte?[] { 0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00}),
-            new FileType("RAR", ".rar", new byte?[] { 0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00}),
-            new FileType("TAR archive", ".tar", new byte?[] { 0x75, 0x73, 0x74, 0x61, 0x72 }, 257),
-            new FileType("TAR ZIP", ".z", new byte?[] { 0x1F, 0x9D }),
-            new FileType("TAR ZIP", ".z", new byte?[] { 0x1F, 0x9D }),
-            new FileType("Bzip2", ".bz2", new byte?[] { 0x42, 0x5A, 0x68 }),
-            new FileType("GZIP", ".gz", new byte?[] { 0x1F, 0x8B }),
-            new FileType("eXtensible ARchive format", ".xar", new byte?[] { 0x78, 0x61, 0x72, 0x21 }),
-            new FileType("ISO9660 CD/DVD image file", ".iso", new byte?[] { 0x43, 0x44, 0x30, 0x30, 0x31 }),
-            new FileType("Apple Disk Image file", ".dmg", new byte?[] { 0x78, 0x01, 0x73, 0x0D, 0x62, 0x62, 0x60 }),
-            new FileType("Microsoft Cabinet file", ".cab", new byte?[] { 0x4D, 0x53, 0x43, 0x46 }),
-            new FileType("Install Shield compressed file", ".cab", new byte?[] { 0x49, 0x53, 0x63, 0x28 }),
-            new FileType("ARJ", ".arj", new byte?[] { 0x60, 0xEA }),
-            new FileType("MS Compiled HTML Help File", ".cab", new byte?[] { 0x49, 0x54, 0x53, 0x46 }),
-            new FileType("MacOS X image file", ".dmg", new byte?[] { 0x78 }),
-            new FileType("LZH", ".lzh", new byte?[] { 0x2D, 0x6C, 0x68 }),
-            new FileType("RedHat Package Manager", ".rpm", new byte?[] { 0xED, 0xAB, 0xEE, 0xDB }),
-            new FileType("Shockwave Flash file", ".swf", new byte?[] { 0x43, 0x57, 0x53 }),
-            new FileType("Virtual PC HD image", ".vhd", new byte?[] { 0x63, 0x6F, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x78 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x01, 0x00 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x57, 0x69, 0x6E, 0x5A, 0x69, 0x70 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x05, 0x06 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x53, 0x70, 0x58 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x4C, 0x49, 0x54, 0x45 }),
-            new FileType("ZIP", ".zip", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("7-Zip", ".7z", new byte?[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }),
-            new FileType("GemBox.Spreadsheet", ".xlsx", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-            new FileType("MP4", ".mp4", new byte?[] { 0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D }),
-            new FileType("MP4", ".mp4", new byte?[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x33, 0x67, 0x70, 0x35 }),
-            new FileType("MP4", ".mp4", new byte?[] { 0x00, 0x00, 0x00, 0x14, 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32 }),
-            new FileType("MP4", ".mp4", new byte?[] { 0x00, 0x00, 0x00, 0x1C, 0x66, 0x74, 0x79, 0x70, 0x4D, 0x53, 0x4E, 0x56, 0x01, 0x29, 0x00, 0x46, 0x4D, 0x53, 0x4E, 0x56, 0x6D, 0x70, 0x34, 0x32}),
-            new FileType("MP4", ".mp4", new byte?[] { 0x66, 0x74, 0x79, 0x70, 0x33, 0x67, 0x70, 0x35 },4),
-            new FileType("MP4", ".mp4", new byte?[] { 0x66, 0x74, 0x79, 0x70, 0x4D, 0x53, 0x4E, 0x56 },4),
-            new FileType("MP4", ".mp4", new byte?[] { 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6F, 0x6D },4),
-            new FileType("MP4", ".mp4", new byte?[] { 0x66, 0x74, 0x79, 0x70, 0x6D, 0x70, 0x34, 0x32 },4),
+            new("PNG", ".png", new byte?[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+            new("JPEG", ".jpg", new byte?[] { 255, 216, 255 }),
+            new("GIF87a", ".gif", Encoding.ASCII.GetBytes("GIF87a").Select(b => (byte?)b).ToArray()),
+            new("GIF89a", ".gif", Encoding.ASCII.GetBytes("GIF89a").Select(b => (byte?)b).ToArray()),
+            new("Bitmap", ".bmp", new byte?[] { 66, 77 }),
+            new("ICO", ".ico", new byte?[] { 0, 0, 1, 0 }),
+            new("TIFF", ".tif", new byte?[] { 73, 73, 42, 0 }),
+            new("TIFF", ".tif", new byte?[] { 77, 77, 0, 42 }),
+            new("TTF", ".ttf", new byte?[] { 0, 1, 0, 0, 0 }),
+            new("PDF", ".pdf", new byte?[] { 37, 80, 68, 70, 45 }, 0, 1019),
+            new("RAR4", ".rar", new byte?[] { 82, 97, 114, 33, 26, 7, 0 }),
+            new("RAR5", ".rar", new byte?[] { 82, 97, 114, 33, 26, 7, 1, 0 }),
+            new("7-Zip", ".7z", new byte?[] { 55, 122, 188, 175, 39, 28 }),
+            new("TAR", ".tar", new byte?[] { 117, 115, 116, 97, 114, 0 }, 257, 257),
+            new("TAR GNU", ".tar", new byte?[] { 117, 115, 116, 97, 114, 32 }, 257, 257),
+            new("Compress", ".z", new byte?[] { 31, 157 }),
+            new("Bzip2", ".bz2", new byte?[] { 66, 90, 104 }),
+            new("GZIP", ".gz", new byte?[] { 31, 139, 8 }),
+            new("XAR", ".xar", new byte?[] { 120, 97, 114, 33 }),
+            new("CAB", ".cab", new byte?[] { 77, 83, 67, 70 }),
+            new("CHM", ".chm", new byte?[] { 73, 84, 83, 70 }),
+            new("RPM", ".rpm", new byte?[] { 237, 171, 238, 219 }),
+            new("SWF", ".swf", new byte?[] { 70, 87, 83 }),
+            new("SWF compressed", ".swf", new byte?[] { 67, 87, 83 }),
+            new("ARJ", ".arj", new byte?[] { 96, 234 }),
+            new("LZH", ".lzh", new byte?[] { 45, 108, 104, null, 45 }, 2, 2),
+            new("ISO9660", ".iso", new byte?[] { 1, 67, 68, 48, 48, 49, 1 }, 32768, 32768),
         };
 
-        private static readonly IList<FileType> UnknownFileTypes = new List<FileType>
-        {
-            new FileType("Excel Microsoft Office Open XML Format Spreadsheet file", ".xlsx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("Microsoft Word Open XML Document file", ".docx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("Microsoft PowerPoint Open XML Presentation file", ".pptx", new byte?[] { 0x50, 0x4B, 0x03, 0x04 }),
-            new FileType("Excel Microsoft Office Open XML Format Spreadsheet file", ".xlsx", new byte?[] { 0x50, 0x4B, 0x05, 0x06 }),
-            new FileType("Microsoft Word  Open XML Document file", ".docx", new byte?[] { 0x50, 0x4B, 0x05, 0x06 }),
-            new FileType("Microsoft PowerPoint Open XML Presentation file", ".pptx", new byte?[] { 0x50, 0x4B, 0x05, 0x06 }),
-            new FileType("Excel Microsoft Office Open XML Format Spreadsheet file", ".xlsx", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-            new FileType("Microsoft Word  Open XML Document file", ".docx", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-            new FileType("Microsoft PowerPoint Open XML Presentation file", ".pptx", new byte?[] { 0x50, 0x4B, 0x07, 0x08 }),
-        }
-        .OrderBy(f => f.MaximumStartLocation)
-        .ThenBy(f => f.MagicSequence.Length)
-        .ToList();
-
-        private bool StartOfFileContainsFileType(FileType type, byte[] startOfFile)
-        {
-            var sig = type.MagicSequence;
-            if (startOfFile.Length < sig.Length) return false;
-            for (int i = 0; i < sig.Length; i++)
-            {
-                if (sig[i] is byte value && startOfFile[i] != value) return false;
-            }
-            return true;
-        }
-
-        // Main detection method 
+        // Retained .NET API; extension-only inference has deliberately been removed.
         public FileTypeRecord GetFileType(string fileName, byte[]? content = null)
         {
-            var ext = Path.GetExtension(fileName)?.Trim().ToLowerInvariant();
+            var result = Detect(fileName, content);
+            return new FileTypeRecord(result.DetectedExtension, result.MimeType, result.ErrorMessage);
+        }
 
-            try
+        public DetectionResult Detect(string? fileName, byte[]? content)
+        {
+            if (content == null || content.Length == 0)
+                return Failure("EMPTY_CONTENT", "File content is required.");
+            if (content.Length > MaxContentBytes)
+                return Failure("FILE_TOO_LARGE", "File exceeds the 50 MiB inspection limit.");
+
+            if (Has(content, 0, new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 }))
+                return Failure("AMBIGUOUS_FORMAT", "OLE container detected; its document subtype is not supported.", "Container", "application/x-ole-storage");
+
+            if (HasAscii(content, 0, "OggS") && content.Length >= 27 && content[4] == 0)
+                return Found(fileName, ".ogg", "application/ogg", "Container");
+            if (Has(content, 0, new byte[] { 48, 38, 178, 117, 142, 102, 207, 17, 166, 217, 0, 170, 0, 98, 206, 108 }))
+                return Found(fileName, ".asf", "application/vnd.ms-asf", "Container");
+            if (Has(content, 0, new byte[] { 26, 69, 223, 163 }))
+                return Failure("AMBIGUOUS_FORMAT", "EBML container detected; Matroska/WebM subtype inspection is not supported.", "Container");
+            if (content.Length >= 512 && HasAscii(content, content.Length - 512, "koly"))
+                return Found(fileName, ".dmg", "application/x-apple-diskimage", "Signature");
+            if (content.Length >= 512 && HasAscii(content, content.Length - 512, "conectix"))
+                return Found(fileName, ".vhd", "application/x-vhd", "Signature");
+
+            if (HasTwoMp3Frames(content)) return Found(fileName, ".mp3", "audio/mpeg", "Signature");
+
+            if (HasAscii(content, 0, "RIFF"))
             {
-                // 1. Office Open XML special case
-                if (ext == ".docx" || ext == ".xlsx" || ext == ".pptx")
-                {
-                    try
-                    {
-                        var (mime, error) = Helper.OfficeFileDetector.DetectOfficeFile(fileName);
-                        return new FileTypeRecord(Path.GetExtension(fileName), mime, error);
-                    }
-                    catch (Exception ex)
-                    {
-                        return new FileTypeRecord(".zip", "application/zip", $"Unknown Office structure: {ex.Message}");
-                    }
-                }
-
-                // 2. Signature match known file types
-                if (content != null)
-                {
-                    foreach (var type in knownFileTypes)
-                    {
-                        if (StartOfFileContainsFileType(type, content))
-                        {
-                            return new FileTypeRecord(type.Extension,
-                                _map.TryGetValue(type.Extension, out var mime) ? mime : "application/octet-stream");
-                        }
-                    }
-
-                    // 3. Signature match unknown legacy types
-                    foreach (var type in UnknownFileTypes)
-                    {
-                        if (StartOfFileContainsFileType(type, content))
-                        {
-                            return new FileTypeRecord(type.Extension,
-                                _map.TryGetValue(type.Extension, out var mime) ? mime : "application/octet-stream");
-                        }
-                    }
-                }
-
-                // 4. Fallback by extension
-                if (!string.IsNullOrEmpty(ext) && _map.TryGetValue(ext, out var fallbackMime))
-                {
-                    return new FileTypeRecord(ext, fallbackMime);
-                }
-
-                // 5. Fallback unknown
-                return new FileTypeRecord(ext ?? string.Empty, "application/octet-stream");
+                if (content.Length < 12) return Failure("TRUNCATED_CONTENT", "RIFF header is incomplete.");
+                if (HasAscii(content, 8, "WAVE")) return Found(fileName, ".wav", "audio/wav", "Container");
+                if (HasAscii(content, 8, "AVI ")) return Found(fileName, ".avi", "video/x-msvideo", "Container");
+                if (HasAscii(content, 8, "WEBP")) return Found(fileName, ".webp", "image/webp", "Container");
+                return Failure("AMBIGUOUS_FORMAT", "Unsupported RIFF subtype.", "Container");
             }
-            catch (Exception ex)
+
+            if (Has(content, 0, new byte[] { 80, 75, 3, 4 }) ||
+                Has(content, 0, new byte[] { 80, 75, 5, 6 }) ||
+                Has(content, 0, new byte[] { 80, 75, 7, 8 }))
+                return OfficeFileDetector.Detect(fileName, content);
+
+            // MZ identifies DOS executables as well as PE files; require a PE header.
+            if (HasAscii(content, 0, "MZ") && content.Length >= 64)
             {
-                // error fatal
-                return new FileTypeRecord(ext ?? string.Empty, "application/octet-stream", ex.Message);
+                uint pe = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(content.AsSpan(60, 4));
+                if (pe <= int.MaxValue && Has(content, (int)pe, new byte[] { 80, 69, 0, 0 }))
+                    return Found(fileName, ".exe", "application/vnd.microsoft.portable-executable", "Signature");
             }
+
+            // ISO base media: check the box and brand, not a hard-coded box size.
+            if (content.Length >= 16 && HasAscii(content, 4, "ftyp"))
+            {
+                uint size = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(content.AsSpan(0, 4));
+                if (size >= 16 && size <= content.Length && (size - 16) % 4 == 0 &&
+                    new[] { "isom", "iso2", "mp41", "mp42", "avc1", "M4V " }.Any(b => HasAscii(content, 8, b)))
+                    return Found(fileName, ".mp4", "video/mp4", "Container");
+            }
+
+            foreach (var type in KnownTypes)
+                if (type.Matches(content)) return Found(fileName, type.Extension,
+                    MimeTypeMap.Mappings.TryGetValue(type.Extension, out string? mime) ? mime : "application/octet-stream", "Signature");
+
+            return Failure("UNSUPPORTED_FORMAT", "The binary format is not recognized.");
+        }
+
+        internal static DetectionResult Failure(string code, string message, string method = "Unknown", string mime = "application/octet-stream") => new()
+        {
+            MimeType = mime, DetectedExtension = "", DetectionMethod = method,
+            ErrorCode = code, ErrorMessage = message
+        };
+
+        internal static DetectionResult Found(string? fileName, string extension, string mime, string method) => new()
+        {
+            MimeType = mime, DetectedExtension = extension, DetectionMethod = method,
+            IsRecognized = true, ExtensionMismatch = !ExtensionMatches(fileName, extension),
+            ErrorCode = "", ErrorMessage = ""
+        };
+
+        internal static bool ExtensionMatches(string? fileName, string detected)
+        {
+            // Treat both slash styles as separators, irrespective of the host OS.
+            string name = (fileName ?? "").Replace('\\', '/').Split('/').Last();
+            int dot = name.LastIndexOf('.');
+            string ext = dot >= 0 ? name[dot..].ToLowerInvariant() : "";
+            if (ext == detected) return true;
+            return (detected, ext) is (".jpg", ".jpeg" or ".jpe") or (".tif", ".tiff") or (".exe", ".dll");
+        }
+
+        private static bool HasAscii(byte[] content, int offset, string text) => Has(content, offset, Encoding.ASCII.GetBytes(text));
+        private static bool Has(byte[] content, int offset, byte[] signature) =>
+            offset >= 0 && offset <= content.Length - signature.Length && content.AsSpan(offset, signature.Length).SequenceEqual(signature);
+
+        private static bool HasTwoMp3Frames(byte[] bytes)
+        {
+            int start = 0;
+            if (HasAscii(bytes, 0, "ID3"))
+            {
+                if (bytes.Length < 10 || bytes[3] is < 2 or > 4 || (bytes[5] & 0x0F) != 0 ||
+                    bytes.AsSpan(6, 4).ContainsAnyInRange((byte)128, byte.MaxValue)) return false;
+                start = 10 + (bytes[6] << 21) + (bytes[7] << 14) + (bytes[8] << 7) + bytes[9];
+                if (bytes[3] == 4 && (bytes[5] & 0x10) != 0) start += 10;
+            }
+            int length = Mp3FrameLength(bytes, start);
+            return length > 0 && Mp3FrameLength(bytes, start + length) > 0 &&
+                (bytes[start + 1] & 0x1E) == (bytes[start + length + 1] & 0x1E) &&
+                (bytes[start + 2] & 0x0C) == (bytes[start + length + 2] & 0x0C);
+        }
+
+        private static int Mp3FrameLength(byte[] bytes, int offset)
+        {
+            if (offset < 0 || offset > bytes.Length - 4 || bytes[offset] != 255 ||
+                (bytes[offset + 1] & 0xE6) != 0xE2) return 0; // sync and Layer III
+            int version = (bytes[offset + 1] >> 3) & 3;
+            int bitrateIndex = bytes[offset + 2] >> 4;
+            int rateIndex = (bytes[offset + 2] >> 2) & 3;
+            if (version == 1 || bitrateIndex is 0 or 15 || rateIndex == 3 || (bytes[offset + 3] & 3) == 2) return 0;
+            int[] bitrates = version == 3
+                ? new[] { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320 }
+                : new[] { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 };
+            int rate = new[] { 44100, 48000, 32000 }[rateIndex] / (version == 3 ? 1 : version == 2 ? 2 : 4);
+            int length = (version == 3 ? 144000 : 72000) * bitrates[bitrateIndex] / rate + ((bytes[offset + 2] >> 1) & 1);
+            return length <= bytes.Length - offset ? length : 0;
         }
     }
-}   
+}
